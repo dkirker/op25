@@ -24,6 +24,7 @@ import ctypes
 import time
 import collections
 import json
+import ast
 sys.path.append('tdma')
 import lfsr
 from helper_funcs import *
@@ -1386,7 +1387,7 @@ class rx_ctl (object):
     def build_config_chans(self, config):
         configs = {}
         for cfg in config:
-            nac = eval(cfg['nac'])
+            nac = ast.literal_eval(cfg['nac'])
             configs[nac] = cfg
         self.setup_config(configs)
 
@@ -1846,6 +1847,7 @@ class rx_ctl (object):
                 tsys.add_skiplist(self.current_tgid, end_time=end_time)
                 if self.hold_mode is False:
                     self.current_tgid = None
+                    self.tgid_hold = None
                 new_state = self.states.CC
                 new_frequency = tsys.trunk_cc
             
