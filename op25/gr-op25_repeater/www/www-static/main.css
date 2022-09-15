@@ -137,6 +137,7 @@ div.info {
 	width: 730px;
 	height: auto;
 	border: 0px solid #000;
+	display: inline-block;
 }
 
 /* system frequencies container that holds the table */
@@ -150,24 +151,28 @@ div.info {
 
 div.system {
 
-	position: absolute;
-	top: 10px;
-	left: 0;
 	width: 54%;
 	height: auto;
-	border: 0px solid #d00
+	border: 0px solid #d00;
+	float: left;
 }
 
 /* adjacent sites container that holds the table */
 
 div.adjacent {
 
-	position: relative;
-	top: 10px;
 	width: 42%;
 	float: right;
 	height: auto;
 	border: 0px solid #00f;
+}
+
+div.history {
+	top: 10px;
+	left: 0;
+	width: 54%;
+	height: auto;
+	border: 0px solid #d00;
 }
 
 /* labels, values, system and tg text */
@@ -216,7 +221,7 @@ div.adjacent {
 /* .s1 .s2 .s3 DIVs for the sections. see index.html */
 
 .s1 {
-	/* empty */
+	padding: 10px;
 }
 
 .s2 {

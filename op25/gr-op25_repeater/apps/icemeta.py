@@ -88,6 +88,8 @@ class meta_server(threading.Thread):
             metatext = self.fmt_tgid
         metatext = metatext.replace("%TGID%", str(meta['tgid']))
         metatext = metatext.replace("%TAG%", str(meta['tag']))
+        metatext = metatext.replace("%RID%", str(meta['rid']))
+        metatext = metatext.replace("%RIDTAG%", str(meta['ridtag']))
         return metatext
 
     def stop(self):

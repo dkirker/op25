@@ -10,6 +10,8 @@ cmake_policy(SET CMP0011 NEW)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0026 OLD)
 cmake_policy(SET CMP0045 OLD)
+cmake_policy(SET CMP0078 OLD)
+cmake_policy(SET CMP0086 OLD)
 
 #select the release build type by default to get optimization flags
 if(NOT CMAKE_BUILD_TYPE)

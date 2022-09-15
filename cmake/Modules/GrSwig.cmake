@@ -185,6 +185,7 @@ macro(GR_SWIG_INSTALL)
             COMPONENT ${GR_SWIG_INSTALL_COMPONENT}
         )
 
+        include(GrMiscUtils)
         GR_LIBTOOL(
             TARGET ${SWIG_MODULE_${name}_REAL_NAME}
             DESTINATION ${GR_SWIG_INSTALL_DESTINATION}

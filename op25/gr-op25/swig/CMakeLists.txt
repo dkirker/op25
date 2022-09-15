@@ -17,6 +17,9 @@
 # the Free Software Foundation, Inc., 51 Franklin Street,
 # Boston, MA 02110-1301, USA.
 
+cmake_policy(SET CMP0078 OLD)
+cmake_policy(SET CMP0086 OLD)
+
 ########################################################################
 # Include swig generation macros
 ########################################################################

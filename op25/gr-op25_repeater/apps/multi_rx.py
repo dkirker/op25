@@ -172,7 +172,14 @@ class channel(object):
         sys.stderr.write('channel (dev %s): %s\n' % (dev.name, config))
         self.verbosity = verbosity
         ch_name = str(from_dict(config, 'name', ""))
-        self.name = ("[%d] %s" % (msgq_id, ch_name)) if ch_name != "" else ("[%d]" % msgq_id) 
+        #self.name = ("[%d] %s" % (msgq_id, ch_name)) if (ch_name != "" and msgq_id > -1) else ("[%d]" % msgq_id)
+        if ch_name != "":
+            if msgq_id > -1:
+                self.name = "[%d] %s" % (msgq_id, ch_name)
+            else:
+                self.name = ch_name
+        else:
+            self.name = "[%d]" % msgq_id
         self.device = dev
         self.frequency = int(from_dict(config, "frequency", dev.frequency))
         self.msgq_id = msgq_id
@@ -896,6 +903,25 @@ class rx_block (gr.top_block):
         elif s == 'get_full_config':
             cfg = self.config
             cfg['json_type'] = "full_config"
+            if self.trunking is not None and self.trunk_rx is not None:
+                cfg['talkgroup_lists'] = {}
+                for trunk_sys in self.trunk_rx.systems:
+                    if 'get_whitelist' in dir(self.trunk_rx.systems[trunk_sys]['system']):
+                        if trunk_sys not in cfg['talkgroup_lists']:
+                            cfg['talkgroup_lists'][trunk_sys] = {}
+                        cfg['talkgroup_lists'][trunk_sys]['allowed'] = []
+
+                        if self.trunk_rx.systems[trunk_sys]['system'].get_whitelist():
+                            for tgid in self.trunk_rx.systems[trunk_sys]['system'].get_whitelist():
+                                cfg['talkgroup_lists'][trunk_sys]['allowed'].append(tgid)
+                    if 'get_blacklist' in dir(self.trunk_rx.systems[trunk_sys]['system']):
+                        if trunk_sys not in cfg['talkgroup_lists']:
+                            cfg['talkgroup_lists'][trunk_sys] = {}
+                        cfg['talkgroup_lists'][trunk_sys]['blocked'] = []
+
+                        if self.trunk_rx.systems[trunk_sys]['system'].get_blacklist():
+                            for tgid in self.trunk_rx.systems[trunk_sys]['system'].get_blacklist():
+                                cfg['talkgroup_lists'][trunk_sys]['blocked'].append(tgid)
             js = json.dumps(cfg)
             msg = gr.message().make_from_string(js, -4, 0, 0)
             self.ui_in_q.insert_tail(msg)

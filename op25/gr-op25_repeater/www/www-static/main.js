@@ -23,6 +23,7 @@ var d_debug = 1;
 
 var http_req = new XMLHttpRequest();
 var terminal_config = {};
+var full_config = {};
 var counter1 = 0;
 var error_val = null;
 var auto_tracking = null;
@@ -51,6 +52,10 @@ var c_nac = 0;
 var c_name = "";
 var channel_list = [];
 var channel_index = 0;
+
+var last_tgid = null;
+var tg_list = [];
+var talkgroup_lists = [];
 
 function find_parent(ele, tagname) {
     while (ele) {
@@ -168,6 +173,18 @@ function term_config(d) {
     }
 }
 
+function do_update_config() {
+    send_command("get_full_config", 0, 0);
+}
+
+function full_config_handler(d) {
+    talkgroup_lists = d['talkgroup_lists'];
+
+    full_config = d;
+
+    term_config(d['terminal']);
+}
+
 function set_tuning_step_sizes(lg_step=1200, sm_step=100) {
     var title_str = "Adjust tune ";
 
@@ -258,6 +275,40 @@ function change_freq(d) {
     channel_status();
 }
 
+function format_talkgroup_lists() {
+    var html = "";
+
+    for (system in talkgroup_lists) {
+        var added = false;
+        var title = "<b>" + system + ":</b><br/>";
+        var allowed = "";
+        var blocked = "";
+
+        if (talkgroup_lists[system].allowed && talkgroup_lists[system].allowed.length > 0) {
+            added = true;
+            allowed = "<tr><td style=\"border-style: none\">Allowed:</td><td style=\"border-style: none\">" + talkgroup_lists[system].allowed.join(", ") + "</td></tr>";
+        }
+        if (talkgroup_lists[system].blocked && talkgroup_lists[system].blocked.length > 0) {
+            added = true;
+            blocked = "<tr><td style=\"border-style: none\">Blocked:</td><td style=\"border-style: none\">" + talkgroup_lists[system].blocked.join(", ") + "</td></tr>";
+        }
+
+        if (added) {
+            if (html != "") {
+                html += "<br/>";
+            }
+            html += title;
+            html += "<table border=\"0\" borderwidth=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"background: none\">" + allowed + blocked + "</table>";
+        }
+    }
+
+    if (html != "") {
+        html = "<tr style=\"background-color: #c0c0c0\"><td colspan=99 style=\"align: center\">" + html + "</td></tr>";
+    }
+
+    return html;
+}
+
 function channel_update(d) {
     var s2_c  = document.getElementById("s2_ch_lbl");
     var s2_d  = document.getElementById("s2_ch_txt");
@@ -273,12 +324,16 @@ function channel_update(d) {
         if (channel_list.length > 0) {
             var c_id = channel_list[channel_index];
             c_system = d[c_id]['system'];
-            c_name = "[" + c_id + "]";
+            if (c_id > -1) {
+                c_name = "[" + c_id + "] ";
+            } else {
+                c_name = "";
+            }
             if ((d[c_id]['name'] != undefined) && (d[c_id]['name'] != "")) {
-                c_name += " " + d[c_id]['name'];
+                c_name += d[c_id]['name'];
             }
             else {
-                c_name += " " + c_system;
+                c_name += c_system;
             }
             s2_d.innerHTML = "<span class=\"value\">" + c_name + "</span>";
 
@@ -303,6 +358,59 @@ function channel_update(d) {
             s2_g.style['display'] = "";
             s2_hc.style['display'] = "";
             s2_ht.style['display'] = "";
+
+            if (current_tgid != null && last_tgid != null && (current_tgid != last_tgid.id || d[c_id]['srcaddr'] != last_tgid.srcaddr)) {
+                var tgdata = {
+                        date: Date.now(),
+                        system: c_system,
+                        tgid: current_tgid,
+                        tag: c_tag,
+                        srcaddr: c_srcaddr,
+                        srctag: c_srctag
+                    };
+
+                tg_list.unshift(tgdata);
+            }
+            last_tgid = {id: current_tgid, srcaddr: c_srcaddr};
+
+            if (tg_list.length > 0) {
+                var tg_history = document.getElementById("tg_history");
+                var tghtml = "<table border=\"1\" borderwidth=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"860px\">" +
+                            "<tr><th colspan=99 style=\"align: center\">Talkgroup History</th></tr>" +
+                            format_talkgroup_lists() +
+                            "<tr><th width=\"20%\">Time</th><th>System</th><th>Src ID</th><th>Source</th><th>TG ID</th><th>Tag</th></tr>";
+
+                for (var i = 0; i < tg_list.length; i++) {
+                    var itg = tg_list[i];
+                    var color = "#d0d0d0";
+
+                    if ((i & 1) == 0)
+                        color = "#c0c0c0";
+
+                    var getLocale = function() {
+                        return (navigator.languages && navigator.languages.length) ? navigator.languages[0] : navigator.language;
+                    };
+
+
+                    var locale = getLocale();
+                    var dateFmt = new Intl.DateTimeFormat(
+                            locale,
+                            {month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"}
+                        );
+                    var dateStr = dateFmt.format(new Date(itg.date));
+
+                    tghtml += "<tr style=\"background-color: " + color + "; vertical-align: top;\">" +
+                            "<td>" + dateStr + "</td>" +
+                            "<td>" + itg.system + "</td>" +
+                            "<td>" + itg.srcaddr + "</td>" +
+                            "<td>" + itg.srctag + "</td>" +
+                            "<td>" + (itg.tgid != null ? itg.tgid : "0") + "</td>" +
+                            "<td>" + itg.tag + "</td></tr>";
+
+                }
+                tghtml += "</table>";
+		tg_history.innerHTML = tghtml;
+            }
         }
         else {
             s2_c.style['display'] = "none";
@@ -382,7 +490,7 @@ function channel_status() {
     html = "";
     if ((c_srcaddr != 0) && (c_srcaddr != 0xffffff)) 
         if (c_srctag != "")
-            html += "<span class=\"value\">" + c_srctag + "</span>";
+            html += "<span class=\"value\">" + c_srcaddr + "&nbsp;&ndash;&nbsp;" + c_srctag + "</span>";
         else
             html += "<span class=\"value\">" + c_srcaddr + "</span>";
     s2_src.innerHTML = html;
@@ -549,6 +657,28 @@ function plot(d) {
     }
 }
 
+function get_tuned_freq(chan) {
+    var chan_i = (chan < 0) ? 0 : chan;
+    var freq = undefined;
+
+    if (full_config.channels && full_config.channels.length > 0) {
+        freq = full_config.channels[chan_i].frequency;
+    }
+
+    return freq;
+}
+
+function get_squelch(chan) {
+    var chan_i = (chan < 0) ? 0 : chan;
+    var squelch = undefined;
+
+    if (full_config.channels && full_config.channels.length > 0) {
+        squelch = full_config.channels[chan_i].nbfm_squelch_threshold;
+    }
+
+    return squelch;
+}
+
 function plot_fft(d) {
     var xArray = [];
     var yArray = [];
@@ -570,10 +700,24 @@ function plot_fft(d) {
     }];
 
     // TODO: Get actual frequency...
-    var center = (d.xrange[1] - d.xrange[0]) / 2 + d.xrange[0];
+    //var center = (d.xrange[1] - d.xrange[0]) / 2 + d.xrange[0];
+
+    var center = get_tuned_freq(d.chan);
+    var squelch = get_squelch(d.chan);
+
+    if (center == undefined) {
+        center = (d.xrange[1] - d.xrange[0]) / 2 + d.xrange[0];
+    } else {
+        center /= 1000000; // TODO: Verify that this is between xrange values
+    }
+
+    var squelch_str = "";
+    if (squelch != undefined) {
+        squelch_str = ", Squelch: " + squelch + "dB";
+    }
 
     var layout = {
-        title: d.title + "<br>" + Date().toString(),
+        title: d.title.replace(" Spectrum:", "<br>Spectrum:") + squelch_str + "<br>" + Date().toString(),
         xaxis: {
             title: {
                 text: "Frequency"
@@ -643,6 +787,21 @@ function plot_fft(d) {
             }
         }]
     };
+
+    if (squelch != undefined) {
+        layout.shapes.push({
+            type: 'line',
+            x0: d.xrange[0],
+            y0: squelch,
+            x1: d.xrange[1],
+            y1: squelch,
+            line: {
+                color: 'red',
+                width: 1.5,
+                opacity: 0.2
+            }
+        });
+    }
 
     var plot_div = document.getElementById('js_plot_fft');
     if (plot_div.style['display'] != 'none') {
@@ -954,7 +1113,7 @@ function plot_mixer(d) {
 
 
     var layout = {
-        title: d.title + "<br>" + Date().toString(),
+        title: d.title.replace(" Mixer:","<br>Mixer:") + "<br>" + Date().toString(),
         xaxis: {
             title: {
                 text: "Frequency"
@@ -1124,7 +1283,15 @@ function http_req_cb() {
     }
     r200_count += 1;
     var dl = JSON.parse(http_req.responseText);
-    var dispatch = {'trunk_update': trunk_update, 'change_freq': change_freq, 'channel_update': channel_update, 'rx_update': rx_update, 'terminal_config': term_config, 'plot': plot}
+    var dispatch = {
+            'trunk_update': trunk_update,
+            'change_freq': change_freq,
+            'channel_update': channel_update,
+            'rx_update': rx_update,
+            'terminal_config': term_config,
+            'full_config': full_config_handler,
+            'plot': plot
+        };
     for (var i=0; i<dl.length; i++) {
         var d = dl[i];
         if (!("json_type" in d))
@@ -1139,7 +1306,8 @@ function do_onload() {
     var ele = document.getElementById("div_status");
     ele.style["display"] = "";
     set_tuning_step_sizes();
-    send_command("get_terminal_config", 0, 0);
+    //send_command("get_terminal_config", 0, 0);
+    send_command("get_full_config", 0, 0);
     setInterval(do_update, 1000);
     b = document.getElementById("b1");
     b.className = "nav-button-active";
@@ -1187,6 +1355,10 @@ function f_chan_button(command) {
     else if (channel_index >= channel_list.length) {
         channel_index = 0;
     }
+    // TODO: reset channel talkgroup history
+    var tg_history = document.getElementById("tg_history");
+    tg_history.innerHTML = "";
+    tg_list = [];
 }
 
 function f_dump_button(command) {
@@ -1244,6 +1416,7 @@ function f_plot_button(command) {
 
 function f_scan_button(command) {
     var _tgid = 0;
+    var update_config = false;
 
     if (command == "goto") {
         command = "hold"
@@ -1257,11 +1430,13 @@ function f_scan_button(command) {
         _tgid = parseInt(prompt("Enter tgid to blacklist", _tgid));
         if (isNaN(_tgid) || (_tgid <= 0) || (_tgid > 65534))
             return;
+        update_config = true;
     }
     else if (command == "whitelist") {
         _tgid = parseInt(prompt("Enter tgid to whitelist", _tgid));
         if (isNaN(_tgid) || (_tgid <= 0) || (_tgid > 65534))
             return;
+        update_config = true;
     }
     else if (command == "set_debug") {
         _tgid = parseInt(prompt("Enter logging level", _tgid));
@@ -1274,6 +1449,10 @@ function f_scan_button(command) {
     }
     else {
         send_command(command, _tgid, Number(channel_list[channel_index]));
+    }
+    if (update_config) {
+        //setInterval(do_update_config, 1000);
+        send_command("get_full_config", 0, 0);
     }
 }
 

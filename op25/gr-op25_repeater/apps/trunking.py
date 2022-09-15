@@ -1293,12 +1293,14 @@ class rx_ctl (object):
             self.meta_q = meta_q
             self.meta_update = self.update_meta
 
-    def update_meta(self, tgid = None, tag = None):
+    def update_meta(self, tgid = None, tag = None, rid = None, ridtag = None):
         if self.meta_q is None:
             return
         d = {'json_type': 'meta_update'}
         d['tgid'] = tgid
         d['tag'] = tag
+        d['rid'] = rid
+        d['ridtag'] = ridtag
         msg = gr.message().make_from_string(json.dumps(d), -2, time.time(), 0)
         self.meta_q.insert_tail(msg)
 
@@ -1342,7 +1344,7 @@ class rx_ctl (object):
             self.frequency_set(params)
             self.current_slot = params['tdma']
 
-    def do_metadata(self, state, tgid, tag):
+    def do_metadata(self, state, tgid, tag, rid = None, ridtag = None):
         if self.meta_update is None:
             return
 
@@ -1350,8 +1352,8 @@ class rx_ctl (object):
             return
 
         if self.debug > 10:
-            sys.stderr.write("%s do_metadata state=%d: [%s] %s\n" % (log_ts.get(), state, tgid, tag))
-        self.meta_update(tgid, tag)
+            sys.stderr.write("%s do_metadata state=%d: [%s] %s - %s: %s\n" % (log_ts.get(), state, tgid, tag, rid, ridtag))
+        self.meta_update(tgid, tag, rid, ridtag)
         self.meta_state = state
 
     def add_trunked_system(self, nac):
