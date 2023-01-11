@@ -73,6 +73,8 @@ from gr_gnuplot import eye_sink_f
 from gr_gnuplot import mixer_sink_c
 from gr_gnuplot import fll_sink_c
 
+from nxdn_trunking import cac_message
+
 sys.path.append('tdma')
 import lfsr
 
@@ -603,6 +605,8 @@ class rx_block (gr.top_block):
 
         if "trunking" in config:
             self.configure_trunking(config['trunking'])
+        else:
+            self.du_watcher = du_queue_watcher(self.rx_q, self.process_rx_msg)
 
         self.configure_devices(config['devices'])
         self.configure_channels(config['channels'])
@@ -858,11 +862,67 @@ class rx_block (gr.top_block):
         if (msgq_id >= 0 and msgq_id < len(self.channels)) and self.channels[msgq_id].nbfm is not None:
             self.channels[msgq_id].nbfm.control(action)
 
+    def process_rx_msg(self, msg):
+        mtype = msg.type()
+        msgtext = msg.to_string()
+        #b3 = int(text[2])
+        msgq_id = int(msgtext[3]) - 256
+
+        #sys.stderr.write("process_rx_msg type %d arg1: %s arg2: %s b1: %s b2: %d b3: %d b4: %d\n" % (mtype, msg.arg1(), msg.arg2(), b1, b2, b3, b4))
+
+        if mtype == -5:
+            msgtext = msgtext[4:]
+            self.process_nxdn_msg(msgq_id, msgtext)
+
+    def process_nxdn_msg(self, msgq_id, s):
+        if isinstance(s[0], str):	# for python 2/3
+            s = [ord(x) for x in s]
+        msgtype = chr(s[0])
+        lich = s[1]
+
+        if self.verbosity > 2:
+            sys.stderr.write ('%s process_nxdn_msg %s lich %x\n' % (log_ts.get(msgq_id=msgq_id), msgtype, lich))
+
+        if msgtype == 'c':	 # CAC type
+            ran = s[2] & 0x3f
+            msg = cac_message(s[2:])
+            if msg['msg_type'] == 'CCH_INFO' and self.verbosity:
+                sys.stderr.write ('%s %-10s %-10s system %d site %d ran %d\n' % (log_ts.get(msgq_id=msgq_id), msg['cc1']/1e6, msg['cc2']/1e6, msg['location_id']['system'], msg['location_id']['site'], ran))
+            if self.verbosity > 1:
+                sys.stderr.write('%s %s\n' % (log_ts.get(msgq_id=msgq_id), json.dumps(msg)))
+
+        if msgtype == 'S':
+            ran = s[2]
+            if self.verbosity > 1:
+                sys.stderr.write('%s RAN: %d\n' % (log_ts.get(msgq_id=msgq_id), ran))
+
+        #if msgtype == 'f':
+        if lich == 0x41:
+            rid = int.from_bytes(s, "big")
+            if ((rid & 0xFFFFF0000000000) >> 40) > 0:
+                sys.stderr.write ('%s RID = %d\n' % (log_ts.get(msgq_id=msgq_id), (rid & 0xFFFFF0000000000) >> 40))
+        #if msgtype == 'S':
+        elif lich == 0x57:
+            label = int.from_bytes(s, "big")
+            if (label & 0xFFFFFFFF) > 0x1FFFFFFF:
+                name = s[8:].decode('utf-8', errors='ignore')
+                sys.stderr.write ('%s LABEL STR = %s (%x)\n' % (log_ts.get(msgq_id=msgq_id), name, label & 0xFFFFFFFF))
+        #elif lich == 0x49:
+
+
+
     def process_qmsg(self, msg):            # Handle UI requests
         RX_COMMANDS = 'skip lockout hold whitelist reload'.split()
         if msg is None:
             return True
         s = msg.to_string()
+
+        #sys.stderr.write("process_qmsg type %d\n" % msg.type())
+
+        if msg.type() == -5:
+            msgtext = s[4:]
+            self.process_nxdn_msg(msgtext)
+
         if type(s) is not str and isinstance(s, bytes):
             # should only get here if python3
             s = s.decode()

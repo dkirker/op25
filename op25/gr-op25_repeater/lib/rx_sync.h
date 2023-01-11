@@ -49,6 +49,8 @@
 #include "op25_imbe_frame.h"
 #include "software_imbe_decoder.h"
 #include "op25_audio.h"
+#include "nxdn_const.h"
+#include "nxdn.h"
 #include "log_ts.h"
 
 #include "rx_base.h"
@@ -63,6 +65,7 @@ enum rx_types {
 	RX_TYPE_DMR,
 	RX_TYPE_DSTAR,
 	RX_TYPE_YSF,
+	RX_TYPE_NXDN,
 	RX_N_TYPES
 };   // also used as array index
 
@@ -78,10 +81,11 @@ static const struct _mode_data {
 	{"P25P2",  40,0,180,2160},
 	{"DMR",    48,66,144,1728},
 	{"DSTAR",  48,72,96,2016*2},
-	{"YSF",    40,0,480,480*2}
+	{"YSF",    40,0,480,480*2},
+	{"NXDN",   20,0,192,192*2/*, NXDN_SYNC_MAGIC*/}
 };   // index order must match rx_types enum
 
-static const int KNOWN_MAGICS = 13;
+static const int KNOWN_MAGICS = 14;
 static const struct _sync_magic {
 	int type;
 	uint64_t magic;
@@ -98,7 +102,8 @@ static const struct _sync_magic {
 	{RX_TYPE_DMR, DMR_T2_VOICE_SYNC_MAGIC},
 	{RX_TYPE_DMR, DMR_T2_DATA_SYNC_MAGIC},
 	{RX_TYPE_DSTAR, DSTAR_FRAME_SYNC_MAGIC},
-	{RX_TYPE_YSF, YSF_FRAME_SYNC_MAGIC}
+	{RX_TYPE_YSF, YSF_FRAME_SYNC_MAGIC},
+	{RX_TYPE_NXDN, NXDN_SYNC_MAGIC}
 }; // maps sync patterns to protocols
 
 enum codeword_types {
@@ -107,7 +112,8 @@ enum codeword_types {
 	CODEWORD_DMR,
 	CODEWORD_DSTAR,
 	CODEWORD_YSF_FULLRATE,
-	CODEWORD_YSF_HALFRATE
+	CODEWORD_YSF_HALFRATE,
+	CODEWORD_NXDN_EHR
 };
 
 class rx_sync : public rx_base {
@@ -132,6 +138,8 @@ private:
 	void ysf_sync(const uint8_t dibitbuf[], bool& ysf_fullrate, bool& unmute);
 	void codeword(const uint8_t* cw, const enum codeword_types codeword_type, int slot_id);
 	void output(int16_t * samp_buf, const ssize_t slot_id);
+	bool nxdn_gate(enum rx_types sync_detected);
+	void nxdn_frame(const uint8_t symbol_ptr[]);
 	static const int CBUF_SIZE=864;
 	static const int NSAMP_OUTPUT = 160;
 
@@ -167,6 +175,10 @@ private:
 	bool d_stereo;
 	int d_debug;
 	op25_audio d_audio;
+	int d_previous_nxdn_sync;
+	int d_previous_nxdn_sr_structure;
+	int d_previous_nxdn_sr_ran;
+	uint8_t d_sacch_buf[72];
 	log_ts& logts;
 };
 

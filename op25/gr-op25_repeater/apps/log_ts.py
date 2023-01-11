@@ -25,7 +25,7 @@ TS_FORMAT = 1
 import time
 class log_ts(object):
     @staticmethod
-    def get(supplied_ts=None):
+    def get(supplied_ts=None,msgq_id=None):
         if supplied_ts is None:
             ts = time.time()
         else:
@@ -35,6 +35,9 @@ class log_ts(object):
             formatted_ts = "{:.6f}".format(ts)
         else:
             formatted_ts = "{:s}{:s}".format(time.strftime("%m/%d/%y %H:%M:%S",time.localtime(ts)),"{:.6f}".format(ts - int(ts)).lstrip("0"))
+
+        if msgq_id is not None:
+            formatted_ts = "%s [%d]" % (formatted_ts, msgq_id)
 
         return formatted_ts
 

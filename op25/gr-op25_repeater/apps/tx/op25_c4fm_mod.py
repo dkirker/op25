@@ -125,11 +125,11 @@ def _transfer_function_nxdn(symbol_rate, modulator=False):
 	return xfer
 
 # rx / demod case
-def transfer_function_nxdn(symbol_rate=_def_symbol_rate):
+def transfer_function_nxdn(symbol_rate=_def_symbol_rate, rate_multiplier=1.0):
 	return _transfer_function_nxdn(symbol_rate)
 
 # tx / modulator case
-def transfer_function_nxdn_tx(symbol_rate=_def_symbol_rate):
+def transfer_function_nxdn_tx(symbol_rate=_def_symbol_rate, rate_multiplier=1.0):
 	return _transfer_function_nxdn(symbol_rate, modulator=True)
 
 class c4fm_taps(object):
