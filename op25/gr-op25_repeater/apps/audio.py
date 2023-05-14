@@ -61,13 +61,15 @@ parser.add_option("-u", "--wireshark-port", type="int", default=23456, help="Wir
 parser.add_option("-2", "--two-channel", action="store_true", default=False, help="single or two channel audio")
 parser.add_option("-x", "--audio-gain", type="float", default="1.0", help="audio gain (default = 1.0)")
 parser.add_option("-s", "--stdout", action="store_true", default=False, help="write to stdout instead of audio device")
- 
+parser.add_option("-m", "--multicast", action="store_true", default=False, help="Audio is sent via multicast")
+parser.add_option("-i", "--host", type="string", default="0.0.0.0", help="Host to bind to, or multicast group to subscribe to")
+
 (options, args) = parser.parse_args()
 if len(args) != 0:
    parser.print_help()
    sys.exit(1)
 
-audio_handler = socket_audio("0.0.0.0", options.wireshark_port, options.audio_output, options.two_channel, options.audio_gain, options.stdout)
+audio_handler = socket_audio(options.host, options.wireshark_port, options.audio_output, options.two_channel, options.audio_gain, options.stdout, options.multicast)
 
 if __name__ == "__main__":
    signal.signal(signal.SIGINT, signal_handler)

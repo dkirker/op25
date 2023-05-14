@@ -31,6 +31,7 @@ import struct
 import ctypes
 import numpy as np
 from log_ts import log_ts
+from urllib.parse import urlparse
 
 # OP25 defaults
 PCM_RATE = 8000             # audio sample rate (Hz)
@@ -371,9 +372,10 @@ class stdout_wrapper(object):
     def dump(self):
         pass
 
+
 # Main class that receives UDP audio samples and sends them to a PCM subsystem (currently ALSA or STDOUT)
 class socket_audio(object):
-    def __init__(self, udp_host, udp_port, pcm_device, two_channels = False, audio_gain = 1.0, dest_stdout = False, **kwds):
+    def __init__(self, udp_host, udp_port, pcm_device, two_channels = False, audio_gain = 1.0, dest_stdout = False, multicast = False, **kwds):
         self.keep_running = True
         self.two_channels = two_channels
         self.audio_gain = audio_gain
@@ -406,7 +408,7 @@ class socket_audio(object):
         else:
             self.keep_running = False
 
-        self.setup_sockets(udp_host, udp_port)
+        self.setup_sockets(udp_host, udp_port, multicast)
 
     def run(self):
         rc = 0
@@ -500,12 +502,24 @@ class socket_audio(object):
         self.keep_running = False
         return
 
-    def setup_sockets(self, udp_host, udp_port):
+    def setup_sockets(self, udp_host, udp_port, multicast):
         sys.stderr.write("Listening on %s:%d\n" % (udp_host, udp_port))
-        self.sock_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.sock_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock_a.setblocking(0)
         self.sock_b.setblocking(0)
+
+        if multicast:
+            #self.sock_a.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            #self.sock_b.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.sock_a.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self.sock_b.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
+            membership = struct.pack("4sl", socket.inet_aton(udp_host), socket.INADDR_ANY)
+            self.sock_a.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            self.sock_b.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+
+
         self.sock_a.bind((udp_host, udp_port))
         self.sock_b.bind((udp_host, udp_port + 2))
         return
@@ -538,11 +552,11 @@ class socket_audio(object):
         return
 
 class audio_thread(threading.Thread):
-    def __init__(self, udp_host, udp_port, pcm_device, two_channels = False, audio_gain = 1.0, dest_stdout = False, **kwds):
+    def __init__(self, udp_host, udp_port, pcm_device, two_channels = False, audio_gain = 1.0, dest_stdout = False, multicast = False, **kwds):
         threading.Thread.__init__(self, **kwds)
         self.setDaemon(True)
         self.keep_running = True
-        self.sock_audio = socket_audio(udp_host, udp_port, pcm_device, two_channels, audio_gain, dest_stdout, **kwds)
+        self.sock_audio = socket_audio(udp_host, udp_port, pcm_device, two_channels, audio_gain, dest_stdout, multicast, **kwds)
         self.start()
         return
 
