@@ -1297,13 +1297,29 @@ class rx_ctl (object):
     def update_meta(self, tgid = None, tag = None, rid = None, ridtag = None):
         if self.meta_q is None:
             return
-        d = {'json_type': 'meta_update'}
-        d['tgid'] = tgid
-        d['tag'] = tag
-        d['rid'] = rid
-        d['ridtag'] = ridtag
-        msg = gr.message().make_from_string(json.dumps(d), -2, time.time(), 0)
-        self.meta_q.insert_tail(msg)
+
+        meta_queue = []
+        if type(self.meta_q) is not list:
+            meta_queue.append(self.meta_q)
+        else:
+            meta_queue = self.meta_q
+
+        for meta_q in meta_queue:
+            d = {'json_type': 'meta_update'}
+            d['tgid'] = tgid
+            d['tag'] = tag
+            d['rid'] = rid
+            d['ridtag'] = ridtag
+            msg = gr.message().make_from_string(json.dumps(d), -2, time.time(), 0)
+            meta_q.insert_tail(msg)
+
+        #d = {'json_type': 'meta_update'}
+        #d['tgid'] = tgid
+        #d['tag'] = tag
+        #d['rid'] = rid
+        #d['ridtag'] = ridtag
+        #msg = gr.message().make_from_string(json.dumps(d), -2, time.time(), 0)
+        #self.meta_q.insert_tail(msg)
 
     def post_init(self):
         self.nacs = list(self.configs.keys())

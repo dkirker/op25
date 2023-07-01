@@ -46,16 +46,24 @@ PATCH_EXPIRY_TIME = 20.0 # Number of seconds until patch expiry
 #################
 # Helper functions
 
-def meta_update(meta_q, tgid = None, tag = None, msgq_id = 0, ts = time.time(), rid = None, ridtag = None):
-    if meta_q is None:
+def meta_update(meta_qs, tgid = None, tag = None, msgq_id = 0, ts = time.time(), rid = None, ridtag = None):
+    if meta_qs is None:
         return
-    d = {'json_type': 'meta_update'}
-    d['tgid'] = tgid
-    d['tag'] = tag
-    d['rid'] = rid
-    d['ridtag'] = ridtag
-    msg = gr.message().make_from_string(json.dumps(d), -2, ts, 0)
-    meta_q.insert_tail(msg)
+
+    meta_queue = []
+    if type(meta_qs) is not list:
+        meta_queue.append(meta_qs)
+    else:
+        meta_queue = meta_qs
+
+    for meta_q in meta_queue:
+        d = {'json_type': 'meta_update'}
+        d['tgid'] = tgid
+        d['tag'] = tag
+        d['rid'] = rid
+        d['ridtag'] = ridtag
+        msg = gr.message().make_from_string(json.dumps(d), -2, ts, 0)
+        meta_q.insert_tail(msg)
 
 def add_default_tgid(tgs, tgid):
     if tgs is None:

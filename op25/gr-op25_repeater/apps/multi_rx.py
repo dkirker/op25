@@ -775,8 +775,18 @@ class rx_block (gr.top_block):
                 if dev == None:
                     continue    
             meta_s, meta_q = None, None
-            if self.metadata is not None and 'meta_stream_name' in cfg and cfg['meta_stream_name'] != "" and cfg['meta_stream_name'] in self.meta_streams:
-                meta_s, meta_q = self.meta_streams[cfg['meta_stream_name']]
+            if self.metadata is not None and 'meta_stream_name' in cfg and cfg['meta_stream_name'] != "": # and cfg['meta_stream_name'] in self.meta_streams:
+                if type(cfg['meta_stream_name']) is str and cfg['meta_stream_name'] in self.meta_streams:
+                    meta_s, meta_q = self.meta_streams[cfg['meta_stream_name']]
+                elif type(cfg['meta_stream_name']) is list:
+                    meta_s = []
+                    meta_q = []
+                    for stream_name in cfg['meta_stream_name']:
+                        if stream_name in self.meta_streams:
+                            temp_s, temp_q = self.meta_streams[stream_name]
+                            meta_s.append(temp_s)
+                            meta_q.append(temp_q)
+
             if self.trunking is not None:
                 msgq_id = len(self.channels)
                 chan = channel(cfg, dev, self.verbosity, msgq_id, self.rx_q, self)
@@ -982,9 +992,16 @@ class rx_block (gr.top_block):
             d[c_idx]['srctag'] = ""
             d[c_idx]['capture'] = False if chan.raw_sink is None else True
             d[c_idx]['stream_url'] = ""
-            if 'meta_stream_name' in chan.config and chan.config['meta_stream_name'] in self.meta_streams:
-                meta_s, meta_q = self.meta_streams[chan.config['meta_stream_name']]
-                d[c_idx]['stream_url'] = meta_s.get_url()
+            if 'meta_stream_name' in chan.config: # and chan.config['meta_stream_name'] in self.meta_streams:
+                if type(chan.config['meta_stream_name']) is str and chan.config['meta_stream_name'] in self.meta_streams:
+                    meta_s, meta_q = self.meta_streams[chan.config['meta_stream_name']]
+                    d[c_idx]['stream_url'] = meta_s.get_url()
+                elif type(chan.config['meta_stream_name']) is list:
+                    d[c_idx]['stream_url'] = []
+                    for stream_name in chan.config['meta_stream_name']:
+                        if stream_name in self.meta_streams:
+                            meta_s, meta_q = self.meta_streams[stream_name]
+                            d[c_idx]['stream_url'].append(meta_s.get_url())
 
             d['channels'].append(c_idx)
 
@@ -1004,10 +1021,19 @@ class rx_block (gr.top_block):
             params[rx_id]['auto_tracking'] = self.find_channel(int(rx_id)).get_auto_tracking()
             params[rx_id]['tracking'] = self.find_channel(int(rx_id)).get_tracking()
             s_name = params[rx_id]['stream']
-            if s_name not in self.meta_streams:
-                continue
-            meta_s, meta_q = self.meta_streams[s_name]
-            params[rx_id]['stream_url'] = meta_s.get_url()
+            if type(s_name) is str:
+                if s_name not in self.meta_streams:
+                    continue
+
+                meta_s, meta_q = self.meta_streams[s_name]
+                params[rx_id]['stream_url'] = meta_s.get_url()
+            elif type(s_name) is list:
+                params[rx_id]['stream_url'] = []
+                for name in s_name:
+                    if name in self.meta_streams:
+                        meta_s, meta_q = self.meta_streams[name]
+                        params[rx_id]['stream_url'].append(meta_s.get_url())
+
         js = json.dumps(params)
         msg = gr.message().make_from_string(js, -4, 0, 0)
         self.ui_in_q.insert_tail(msg)
