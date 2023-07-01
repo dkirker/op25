@@ -36,7 +36,7 @@ import pmt
 import op25
 import op25_repeater
 import rms_agc
-from math import pi
+from math import pi, isnan, isinf
 
 sys.path.append('tx')
 import op25_c4fm_mod
@@ -406,7 +406,7 @@ class p25_demod_cb(p25_demod_base):
         gain_omega = 0.1  * gain_mu * gain_mu
 
         self.agc = rms_agc.rms_agc(0.45, 0.85)
-        self.fll = digital.fll_band_edge_cc(sps, excess_bw, 2*sps+1, TWO_PI/sps/250) # automatic frequency correction
+        self.fll = digital.fll_band_edge_cc(sps, excess_bw, 2*sps+1, TWO_PI/sps/350) # automatic frequency correction
         self.clock = op25_repeater.gardner_cc(omega, gain_mu, gain_omega)            # timing recovery
         self.costas = op25_repeater.costas_loop_cc(costas_alpha, 4, TWO_PI/4)        # phase stabilization, range-limited to +/-90deg
 
@@ -438,7 +438,10 @@ class p25_demod_cb(p25_demod_base):
         return self.clock.quality()
 
     def get_freq_error(self):   # get frequency error from FLL and convert to Hz
-        return int((self.fll.get_frequency() / TWO_PI) * self.if_rate)
+        fll_err = self.fll.get_frequency()
+        if isnan(fll_err) or isinf(fll_err):
+            return 0
+        return int((fll_err / TWO_PI) * self.if_rate)
 
     def set_omega(self, rate):
         self.set_symbol_rate(rate)
@@ -447,7 +450,7 @@ class p25_demod_cb(p25_demod_base):
             return
         self.sps = sps
         self.clock.set_omega(self.sps)
-        self.fll.set_samples_per_symbol(sps)
+        #self.fll.set_samples_per_symbol(sps) # gnuradio fll_band_edge_cc block is not currently thread-safe 01/8/2023
         self.costas_reset()
 
     def reset(self):

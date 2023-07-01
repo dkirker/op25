@@ -67,8 +67,14 @@ class q_watcher(threading.Thread):
 
     def run(self):
         while(self.keep_running):
-            msg = self.msgq.delete_head()
-            self.callback(msg)
+            if not self.msgq.empty_p():
+                msg = self.msgq.delete_head()
+                if msg is not None:
+                    self.callback(msg)
+                else:
+                    self.keep_running = False
+            else:
+                time.sleep(0.1)
 
 class curses_terminal(threading.Thread):
     def __init__(self, input_q,  output_q, sock=None, **kwds):
@@ -504,7 +510,8 @@ class curses_terminal(threading.Thread):
             self.sock.send(js)
         else:
             msg = gr.message().make_from_string(command, -2, arg1, arg2)
-            self.output_q.insert_tail(msg)
+            if not self.output_q.full_p():
+                self.output_q.insert_tail(msg)
 
     def run(self):
         try:
@@ -534,7 +541,6 @@ class http_terminal(threading.Thread):
         self.endpoint = endpoint
         self.keep_running = True
         self.server = http_server(self.input_q, self.output_q, self.endpoint)
-
         self.start()
 
     def get_terminal_type(self):
@@ -587,7 +593,8 @@ class udp_terminal(threading.Thread):
                 self.keepalive_until = 0
                 continue
             msg = gr.message().make_from_string(str(data['command']), -2, data['arg1'], data['arg2'])
-            self.output_q.insert_tail(msg)
+            if not self.output_q.full_p():
+                self.output_q.insert_tail(msg)
             self.remote_ip = addr[0]
             self.remote_port = addr[1]
             self.keepalive_until = time.time() + KEEPALIVE_TIME
@@ -624,7 +631,8 @@ class terminal_client(object):
             try:
                 js, addr = self.sock.recvfrom(2048)
                 msg = gr.message().make_from_string(js, -4, 0, 0)
-                self.input_q.insert_tail(msg)
+                if not self.input_q.full_p():
+                    self.input_q.insert_tail(msg)
             except socket.timeout:
                 pass
             except:

@@ -69,7 +69,8 @@ def post_req(environ, start_response, postdata):
         data = json.loads(postdata)
         for d in data:
             msg = gr.message().make_from_string(str(d['command']), -2, d['arg1'], d['arg2'])
-            my_output_q.insert_tail(msg)
+            if not my_output_q.full_p():
+                my_output_q.insert_tail(msg)
         valid_req = True
         time.sleep(0.2)
     except:
@@ -124,7 +125,8 @@ def process_qmsg(msg):
         my_recv_q.delete_head_nowait()   # ignores result
     if my_recv_q.full_p():
         return
-    my_recv_q.insert_tail(msg)
+    if not my_recv_q.full_p():
+        my_recv_q.insert_tail(msg)
 
 class http_server(object):
     def __init__(self, input_q, output_q, endpoint, **kwds):
@@ -159,5 +161,11 @@ class queue_watcher(threading.Thread):
 
     def run(self):
         while(self.keep_running):
-            msg = self.msgq.delete_head()
-            self.callback(msg)
+            if not self.msgq.empty_p(): # check queue before trying to read a message to avoid deadlock at startup
+                msg = self.msgq.delete_head()
+                if msg is not None:
+                    self.callback(msg)
+                else:
+                    self.keep_running = False
+            else: # empty queue
+                time.sleep(0.01)
