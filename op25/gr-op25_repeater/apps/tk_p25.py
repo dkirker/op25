@@ -46,9 +46,21 @@ PATCH_EXPIRY_TIME = 20.0 # Number of seconds until patch expiry
 #################
 # Helper functions
 
+def valid_tgid_rid(addr):
+    if addr is None or int(addr) <= 0 or int(addr) >= 0xFFFFFF:
+        return False
+    return True
+
 def meta_update(meta_qs, tgid = None, tag = None, msgq_id = 0, ts = time.time(), rid = None, ridtag = None):
     if meta_qs is None:
         return
+
+    if tgid is not None and not valid_tgid_rid(tgid):
+        return
+    if rid is not None and not valid_tgid_rid(rid):
+        return
+
+    sys.stderr.write("%s meta_update: tgid: %s tag: %s rid: %s ridtag: %s\n" % (log_ts.get(), tgid, tag, rid, ridtag))
 
     meta_queue = []
     if type(meta_qs) is not list:
@@ -293,6 +305,7 @@ class p25_system(object):
         self.last_expiry_check = 0.0
         self.stats = {}
         self.stats['tsbk_count'] = 0
+        self.meta_q = None
 
         sys.stderr.write("%s [%s] Initializing P25 system\n" % (log_ts.get(), self.sysname))
 
@@ -329,6 +342,9 @@ class p25_system(object):
         for f in cc_list.split(','):
             self.cc_list.append(get_frequency(f))
         self.next_cc()
+
+    def set_meta_q(self, meta_q):
+        self.meta_q = meta_q
 
     def set_debug(self, dbglvl):
         self.debug = dbglvl
@@ -1362,6 +1378,8 @@ class p25_system(object):
             tgid not in self.talkgroups or self.talkgroups[tgid]['receiver'] is None):
             return 0
 
+        update_meta = self.talkgroups[tgid]['srcaddr'] != srcaddr
+
         self.talkgroups[tgid]['srcaddr'] = srcaddr
         add_default_rid(self.sourceids, srcaddr)
         self.sourceids[srcaddr]['counter'] += 1
@@ -1371,6 +1389,10 @@ class p25_system(object):
         else:
             self.sourceids[srcaddr]['tgs'][tgid] += 1;
         self.sourceid_history.record(srcaddr, tgid, curr_time)
+
+        if update_meta and self.meta_q is not None:
+            meta_update(self.meta_q, tgid, self.talkgroups[tgid]['tag'], msgq_id=0, rid=self.talkgroups[tgid]['srcaddr'], ridtag=self.get_rid_tag(self.talkgroups[tgid]['srcaddr']))
+
         return 1
 
     def expire_talkgroups(self, curr_time):
@@ -1540,6 +1562,8 @@ class p25_receiver(object):
         self.hold_mode = False
         self.tgid_hold_time = TGID_HOLD_TIME
         self.vc_retries = 0
+
+        self.system.set_meta_q(meta_q)
 
     def set_debug(self, dbglvl):
         self.debug = dbglvl

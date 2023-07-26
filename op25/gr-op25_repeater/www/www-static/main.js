@@ -380,33 +380,37 @@ function channel_update(d) {
                             format_talkgroup_lists() +
                             "<tr><th width=\"20%\">Time</th><th>System</th><th>Src ID</th><th>Source</th><th>TG ID</th><th>Tag</th></tr>";
 
-                for (var i = 0; i < tg_list.length; i++) {
+                for (var i = 0, j = 0; i < tg_list.length; i++) {
                     var itg = tg_list[i];
                     var color = "#d0d0d0";
 
-                    if ((i & 1) == 0)
-                        color = "#c0c0c0";
+                    // It seems that we sometimes get a srcaddr of 0 that basically amounts to nothing.
+                    if (itg.srcaddr != 0) {
+                        if ((j & 1) == 0)
+                            color = "#c0c0c0";
 
-                    var getLocale = function() {
-                        return (navigator.languages && navigator.languages.length) ? navigator.languages[0] : navigator.language;
-                    };
+                        var getLocale = function() {
+                            return (navigator.languages && navigator.languages.length) ? navigator.languages[0] : navigator.language;
+                        };
 
 
-                    var locale = getLocale();
-                    var dateFmt = new Intl.DateTimeFormat(
-                            locale,
-                            {month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"}
-                        );
-                    var dateStr = dateFmt.format(new Date(itg.date));
+                        var locale = getLocale();
+                        var dateFmt = new Intl.DateTimeFormat(
+                                locale,
+                                {month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"}
+                            );
+                        var dateStr = dateFmt.format(new Date(itg.date));
 
-                    tghtml += "<tr style=\"background-color: " + color + "; vertical-align: top;\">" +
-                            "<td>" + dateStr + "</td>" +
-                            "<td>" + itg.system + "</td>" +
-                            "<td>" + itg.srcaddr + "</td>" +
-                            "<td>" + itg.srctag + "</td>" +
-                            "<td>" + (itg.tgid != null ? itg.tgid : "0") + "</td>" +
-                            "<td>" + itg.tag + "</td></tr>";
+                        tghtml += "<tr style=\"background-color: " + color + "; vertical-align: top;\">" +
+                                "<td>" + dateStr + "</td>" +
+                                "<td>" + itg.system + "</td>" +
+                                "<td>" + itg.srcaddr + "</td>" +
+                                "<td>" + itg.srctag + "</td>" +
+                                "<td>" + (itg.tgid != null ? itg.tgid : "0") + "</td>" +
+                                "<td>" + itg.tag + "</td></tr>";
 
+                        j++;
+                    }
                 }
                 tghtml += "</table>";
 		tg_history.innerHTML = tghtml;
