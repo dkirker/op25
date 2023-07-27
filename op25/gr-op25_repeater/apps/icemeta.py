@@ -58,7 +58,8 @@ class meta_server(threading.Thread):
         self.delay = float(self.cfg['delay'])
         self.fmt_idle = from_dict(self.cfg, 'meta_format_idle', '[idle]')
         self.fmt_tgid = from_dict(self.cfg, 'meta_format_tgid', '[%TGID%]')
-        self.fmt_tag = from_dict(self.cfg, 'meta_format_tag', '[%TGID%] %TAG%')
+        self.fmt_tag = from_dict(self.cfg, 'meta_format_tag', '[%TGID%] %TAG%: %RIDTAG% (%RID%)')
+        self.fmt_tag_no_ridtag = from_dict(self.cfg, 'meta_format_tag_no_ridtag', '[%TGID%] %TAG%: %RID%')
         self.start()
 
     def set_debug(self, dbglvl):
@@ -82,8 +83,10 @@ class meta_server(threading.Thread):
     def format(self, meta):
         if meta['tgid'] is None:
             metatext = self.fmt_idle
-        elif meta['tgid'] is not None and meta['tag'] is not None and meta['tag'] != "":
+        elif meta['tgid'] is not None and meta['tag'] is not None and meta['tag'] != "" and meta["ridtag"] is not None and meta["ridtag"] != "":
             metatext = self.fmt_tag
+        elif meta['tgid'] is not None and meta['tag'] is not None and meta['tag'] != "":
+            metatext = self.fmt_tag_no_ridtag
         else:
             metatext = self.fmt_tgid
         metatext = metatext.replace("%TGID%", str(meta['tgid']))
