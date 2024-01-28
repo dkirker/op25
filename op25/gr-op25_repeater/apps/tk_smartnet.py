@@ -139,6 +139,9 @@ class rx_ctl(object):
             if self.receivers[rx]['rx_sys'] is not None:
                 self.receivers[rx]['rx_sys'].post_init()
 
+    def reload_tg_config(self):
+        sys.stderr.write("reload_tg_config not implemented for tk_smartnet")
+
     # process_qmsg is the main message dispatch handler connecting the 'radios' to python
     def process_qmsg(self, msg):
         curr_time = time.time()

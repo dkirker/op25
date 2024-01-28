@@ -397,6 +397,9 @@ class rx_ctl(object):
         for rx_id in self.receivers:
             self.receivers[rx_id].post_init()
 
+    def reload_tg_config(self):
+        sys.stderr.write("reload_tg_config not implemented for tk_trbo")
+
     def add_receiver(self, msgq_id, config, meta_q = None, freq = 0):
         self.receivers[msgq_id] = dmr_receiver(msgq_id, self.frequency_set, self.fa_ctrl, self.chans, self.debug)
 

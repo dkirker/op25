@@ -31,6 +31,8 @@ from helper_funcs import *
 from log_ts import log_ts
 from gnuradio import gr
 
+import traceback
+
 #################
 
 CC_TIMEOUT_RETRIES = 3   # Number of control channel framing timeouts before hunting
@@ -60,6 +62,8 @@ def meta_update(meta_qs, tgid = None, tag = None, msgq_id = 0, ts = time.time(),
     if rid is not None and not valid_tgid_rid(rid):
         return
 
+    #if self.debug >= 12:
+    #    sys.stderr.write("%s stack: %s" % (log_ts.get(), ''.join(traceback.format_stack()[-3:])))
     sys.stderr.write("%s meta_update: tgid: %s tag: %s rid: %s ridtag: %s\n" % (log_ts.get(), tgid, tag, rid, ridtag))
 
     meta_queue = []
@@ -176,6 +180,14 @@ class rx_ctl(object):
             sys.stderr.write("%s [rx_ctl] post initialize check control channel assignments\n" % (log_ts.get()))
         self.check_cc_assignments()
 
+    def reload_tg_config(self):
+        for sysname in self.systems:
+            if self.systems[sysname]['system'] is not None:
+                self.systems[sysname]['system'].reload_tg_config()
+        for rx in self.receivers:
+            if self.receivers[rx]['rx_rcvr'] is not None:
+                self.receivers[rx]['rx_rcvr'].reload_tg_config()
+
     # process_qmsg is the main message dispatch handler connecting the 'radios' to python
     def process_qmsg(self, msg):
         curr_time = time.time()
@@ -243,6 +255,8 @@ class rx_ctl(object):
         for system in self.systems:
             self.systems[system]['system'].dump_tgids()
             self.systems[system]['system'].dump_rids()
+            self.systems[system]['system'].dump_whitelist()
+            self.systems[system]['system'].dump_blacklist()
             self.systems[system]['system'].sourceid_history.dump()
 
     def get_chan_status(self):
@@ -455,6 +469,29 @@ class p25_system(object):
                         sys.stderr.write("%s [%s] setting rid(%d), tag(%s)\n" % (log_ts.get(), self.sysname, rid, tag))
         except (IOError) as ex:
             sys.stderr.write("read_rid_file: exception %s\n" % ex)
+
+    def reload_tg_config(self):
+        sys.stderr.write("Reloading tgid_tags_file, rid_tags_file, blacklist, and whitelist\n")
+
+        self.talkgroups = {}
+        if 'tgid_tags_file' in self.config and self.config['tgid_tags_file'] != "":
+            sys.stderr.write("%s [%s] reading system tgid_tags_file: %s\n" % (log_ts.get(), self.sysname, self.config['tgid_tags_file']))
+            self.read_tags_file(self.config['tgid_tags_file'])
+
+        self.sourceids = {}
+        if 'rid_tags_file' in self.config and self.config['rid_tags_file'] != "":
+            sys.stderr.write("%s [%s] reading system rid_tags_file: %s\n" % (log_ts.get(), self.sysname, self.config['rid_tags_file']))
+            self.read_rids_file(self.config['rid_tags_file'])
+
+        self.blacklist = {}
+        if 'blacklist' in self.config and self.config['blacklist'] != "":
+            sys.stderr.write("%s [%s] reading system blacklist file: %s\n" % (log_ts.get(), self.sysname, self.config['blacklist']))
+            self.blacklist = get_int_dict(self.config['blacklist'], self.sysname)
+
+        self.whitelist = None
+        if 'whitelist' in self.config and self.config['whitelist'] != "":
+            sys.stderr.write("%s [%s] reading system whitelist file: %s\n" % (log_ts.get(), self.sysname, self.config['whitelist']))
+            self.whitelist = get_int_dict(self.config['whitelist'], self.sysname)
 
     def get_cc(self, msgq_id):
         if msgq_id is None:
@@ -928,7 +965,7 @@ class p25_system(object):
         keyid = get_ordinals(msg[10:12])
         sa    = get_ordinals(msg[12:15])
         ga    = get_ordinals(msg[15:17])
-        if self.debug >= 10:
+        if self.debug >= 2:
             sys.stderr.write('%s [%d] mac_ptt: mi: %x algid: %x keyid:%x ga: %d sa: %d\n' % (log_ts.get(), m_rxid, mi, algid, keyid, ga, sa))
         return self.update_talkgroup_srcaddr(curr_time, ga, sa)
 
@@ -938,7 +975,7 @@ class p25_system(object):
         mi    = get_ordinals(msg[0:9])
         sa    = get_ordinals(msg[12:15])
         ga    = get_ordinals(msg[15:17])
-        if self.debug >= 10:
+        if self.debug >= 2:
             sys.stderr.write('%s [%d] mac_end_ptt: ga: %d sa: %d\n' % (log_ts.get(), m_rxid, ga, sa))
         return self.update_talkgroup_srcaddr(curr_time, ga, sa)
 
@@ -957,7 +994,7 @@ class p25_system(object):
         if op == 0x01:   # Group Voice Channel User Abbreviated
             ga = get_ordinals(msg[2:4])
             sa = get_ordinals(msg[4:7])
-            if self.debug >= 10:
+            if self.debug >= 4:
                 sys.stderr.write('%s [%d] tdma(0x01) grp_v_ch_usr: ga: %d sa: %d\n' % (log_ts.get(), m_rxid, ga, sa))
             updated += self.update_talkgroup_srcaddr(curr_time, ga, sa)
         elif op == 0x05: # Group Voice Channel Grant Update Multiple - Implicit
@@ -970,7 +1007,7 @@ class p25_system(object):
             f1 = self.channel_id_to_frequency(ch1)
             f2 = self.channel_id_to_frequency(ch2)
             f3 = self.channel_id_to_frequency(ch3)
-            if self.debug >= 10:
+            if self.debug >= 1:
                 sys.stderr.write('%s [%d] tdma(0x05) grp_v_ch_grant_up: f1: %s ga1: %d f2: %s ga2: %d f3: %s ga3: %d\n' % (log_ts.get(), m_rxid, self.channel_id_to_string(ch1), ga1, self.channel_id_to_string(ch2), ga2, self.channel_id_to_string(ch3), ga3))
             self.update_voice_frequency(f1, tgid=ga1, tdma_slot=self.get_tdma_slot(ch1))
             self.update_voice_frequency(f2, tgid=ga2, tdma_slot=self.get_tdma_slot(ch2))
@@ -981,7 +1018,7 @@ class p25_system(object):
             ga   = get_ordinals(msg[2:4])
             sa   = get_ordinals(msg[4:7])
             suid = get_ordinals(msg[7:14])
-            if self.debug >= 10:
+            if self.debug >= 4:
                 sys.stderr.write('%s [%d] tdma(0x21) grp_v_ch_usr: ga: %d sa: %d: suid: %d\n' % (log_ts.get(), m_rxid, ga, sa, suid))
             updated += self.update_talkgroup_srcaddr(curr_time, ga, sa)
         elif op == 0x25: # Group Voice Channel Grant Update Multiple - Explicit
@@ -993,7 +1030,7 @@ class p25_system(object):
             ga2  = get_ordinals(msg[13:15])
             f1   = self.channel_id_to_frequency(ch1t)
             f2   = self.channel_id_to_frequency(ch2t)
-            if self.debug >= 10:
+            if self.debug >= 1:
                 sys.stderr.write('%s [%d] tdma(0x25) grp_v_ch_grant_up: f1-t: %s f1-r: %s ga1: %d f2-t: %s f2-r: %s ga2: %d\n' % (log_ts.get(), m_rxid, self.channel_id_to_string(ch1t), self.channel_id_to_string(ch1r), ga1, self.channel_id_to_string(ch2t), self.channel_id_to_string(ch2r), ga2))
             self.update_voice_frequency(f1, tgid=ga1, tdma_slot=self.get_tdma_slot(ch1t))
             self.update_voice_frequency(f2, tgid=ga2, tdma_slot=self.get_tdma_slot(ch2t))
@@ -1013,7 +1050,7 @@ class p25_system(object):
         elif op == 0x80 and mfid == 0x90: # MFID90 Group Regroup Voice Channel User Abbreviated
             sg = get_ordinals(msg[3:5])
             sa = get_ordinals(msg[5:8])
-            if self.debug >= 10:
+            if self.debug >= 4:
                 sys.stderr.write('%s [%d] tdma(0x80) mfid90 grp_regrp_v_ch_usr: sg: %d sa: %d\n' % (log_ts.get(), m_rxid, sg, sa))
             updated += self.update_talkgroup_srcaddr(curr_time, sg, sa)
         elif op == 0x81 and mfid == 0x90: # MFID90 Group Regroup Add Command
@@ -1055,7 +1092,7 @@ class p25_system(object):
             sg    = get_ordinals(msg[4:6])
             sa    = get_ordinals(msg[6:9])
             ssuid = get_ordinals(msg[9:16])
-            if self.debug >= 10:
+            if self.debug >= 4:
                 sys.stderr.write('%s [%d] tdma(0xa0) mfid90 grp_regrp_v_ch_usr: sg: %d sa: %d, ssuid: %d\n' % (log_ts.get(), m_rxid, sg, sa, ssuid))
             updated += self.update_talkgroup_srcaddr(curr_time, sg, sa)
         elif op == 0xa3 and mfid == 0x90: # MFID90 Group Regroup Channel Grant Implicit
@@ -1245,7 +1282,7 @@ class p25_system(object):
             mfid = get_ordinals(msg[1:2])
             ga = get_ordinals(msg[4:6])
             sa = get_ordinals(msg[6:9])
-            if self.debug >= 10:
+            if self.debug >= 4:
                 sys.stderr.write('%s [%d] lcw(0x00) grp_v_ch_usr: ga: %d s: %d sa: %d\n' % (log_ts.get(), m_rxid, ga, (get_ordinals(msg[3:4]) & 0x1), sa))
             updated += self.update_talkgroup_srcaddr(curr_time, ga, sa)
         elif pb_sf_lco == 0x42:     # Group Voice Channel Update
@@ -1467,6 +1504,18 @@ class p25_system(object):
             sys.stderr.write('%d\t"%s"\t# tgids %s\n' % (rid, self.sourceids[rid]['tag'], self.sourceids[rid]['tgs']));
         sys.stderr.write("}\n") 
 
+    def dump_whitelist(self):
+        sys.stderr.write("%s [%s] Whitelist: {\n" % (log_ts.get(), self.sysname))
+        for tgid in self.whitelist:
+            sys.stderr.write("%s: %s\n" % (tgid, self.whitelist[tgid]))
+        sys.stderr.write("}\n")
+
+    def dump_blacklist(self):
+        sys.stderr.write("%s [%s] Blacklist: {\n" % (log_ts.get(), self.sysname))
+        for tgid in self.blacklist:
+            sys.stderr.write("%s: %s\n" % (tgid, self.blacklist[tgid]))
+        sys.stderr.write("}\n")
+
     def to_json(self):  # ugly but required for compatibility with P25 trunking and terminal modules
         d = {}
         d['system']         = self.sysname
@@ -1581,6 +1630,10 @@ class p25_receiver(object):
         self.tgid_hold_time = float(from_dict(self.system.config, 'tgid_hold_time', TGID_HOLD_TIME))
         meta_update(self.meta_q, msgq_id=self.msgq_id)
         self.idle_rx()
+
+    def reload_tg_config(self):
+        self.load_bl_wl()
+        self.talkgroups = self.system.get_talkgroups()
 
     def load_bl_wl(self):
         if 'blacklist' in self.config and self.config['blacklist'] != "":
@@ -1775,7 +1828,7 @@ class p25_receiver(object):
                 keyid = get_ordinals(s[10:12])
                 sa    = get_ordinals(s[12:15])
                 ga    = get_ordinals(s[15:17])
-                if self.debug >= 10:
+                if self.debug >= 2:
                     sys.stderr.write('%s [%d] mac_ptt: mi: %x algid: %x keyid:%x ga: %d sa: %d\n' % (log_ts.get(), m_rxid, mi, algid, keyid, ga, sa))
                 updated += self.system.update_talkgroup_srcaddr(curr_time, ga, sa)
                 if algid != 0x80: # log and save encryption information
@@ -1794,7 +1847,7 @@ class p25_receiver(object):
             elif m_type == 17: # MAC_END_PTT
                 sa    = get_ordinals(s[12:15])
                 ga    = get_ordinals(s[15:17])
-                if self.debug >= 10:
+                if self.debug >= 2:
                     sys.stderr.write('%s [%d] mac_end_ptt: ga: %d sa: %d\n' % (log_ts.get(), m_rxid, ga, sa))
                 self.system.update_talkgroup_srcaddr(curr_time, ga, sa)
                 self.expire_talkgroup(reason="duid15")
@@ -1824,6 +1877,7 @@ class p25_receiver(object):
                 sys.stderr.write("%s [%d] blacklist tgid(%d) out of range (1-65534)\n" % (log_ts.get(), self.msgq_id, tgid))
             return
         if tgid in self.blacklist:
+            sys.stderr.write("%s [%d] already in blacklist: tgid(%d)\n" % (log_ts.get(), self.msgq_id, tgid))
             return
         if end_time is None and self.whitelist and tgid in self.whitelist:
             self.whitelist.pop(tgid)
@@ -1833,7 +1887,7 @@ class p25_receiver(object):
                 self.whitelist = None
                 if self.debug > 1:
                     sys.stderr.write("%s removing empty whitelist\n" % log_ts.get())
-        self.blacklist[tgid] = end_time
+        self.blacklist[int(tgid)] = end_time
         if self.debug > 1:
             sys.stderr.write("%s [%d] blacklisting: tgid(%d)\n" % (log_ts.get(), self.msgq_id, tgid))
         if self.current_tgid and self.current_tgid in self.blacklist:
@@ -1852,8 +1906,9 @@ class p25_receiver(object):
         if self.whitelist is None:
             self.whitelist = {}
         if tgid in self.whitelist:
+            sys.stderr.write("%s [%d] already in whitelist: tgid(%d)\n" % (log_ts.get(), self.msgq_id, tgid))
             return
-        self.whitelist[tgid] = None
+        self.whitelist[int(tgid)] = None
         if self.debug > 1:
             sys.stderr.write("%s [%d] whitelisting: tgid(%d)\n" % (log_ts.get(), self.msgq_id, tgid))
         if self.current_tgid and self.current_tgid not in self.whitelist:

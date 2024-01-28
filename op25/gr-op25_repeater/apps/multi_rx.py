@@ -51,6 +51,7 @@ import json
 import traceback
 import osmosdr
 import importlib
+import signal
 
 from gnuradio import audio, eng_notation, gr, gru, filter, blocks, fft, analog, digital
 from gnuradio.eng_option import eng_option
@@ -619,6 +620,9 @@ class rx_block (gr.top_block):
         if "terminal" in config:
             self.configure_terminal(config['terminal'])
 
+        signal.signal(signal.SIGUSR1, self.reload_trunking_tg_config)
+        signal.siginterrupt(signal.SIGUSR1, False)
+
     def set_debug(self, dbglvl):
         self.verbosity = dbglvl
         for ch in self.channels:
@@ -1018,11 +1022,12 @@ class rx_block (gr.top_block):
             return False
         params = json.loads(self.trunk_rx.get_chan_status())   # extract data from all channels
         for rx_id in params['channels']:                       # iterate and convert stream name to url
-            params[rx_id]['ppm'] = self.find_channel(int(rx_id)).device.get_ppm()
-            params[rx_id]['capture'] = False if self.find_channel(int(rx_id)).raw_sink is None else True
-            params[rx_id]['error'] = self.find_channel(int(rx_id)).get_error() if self.find_channel(int(rx_id)).auto_tracking else None
-            params[rx_id]['auto_tracking'] = self.find_channel(int(rx_id)).get_auto_tracking()
-            params[rx_id]['tracking'] = self.find_channel(int(rx_id)).get_tracking()
+            chan = self.find_channel(int(rx_id))
+            params[rx_id]['ppm'] = chan.device.get_ppm()
+            params[rx_id]['capture'] = False if chan.raw_sink is None else True
+            params[rx_id]['error'] = chan.get_error() if chan.auto_tracking else None
+            params[rx_id]['auto_tracking'] = chan.get_auto_tracking()
+            params[rx_id]['tracking'] = chan.get_tracking()
             s_name = params[rx_id]['stream']
             if type(s_name) is str:
                 if s_name not in self.meta_streams:
@@ -1060,6 +1065,12 @@ class rx_block (gr.top_block):
         msg = gr.message().make_from_string(json.dumps(d), -4, 0, 0)
         if not self.ui_in_q.full_p():
             self.ui_in_q.insert_tail(msg)
+
+    def reload_trunking_tg_config(self, signal, frame):
+        sys.stderr.write("Received signal to reload trunking tg config\n")
+
+        if self.trunking is not None and self.trunk_rx is not None:
+            self.trunk_rx.reload_tg_config()
 
     def kill(self):
         for chan in self.channels:

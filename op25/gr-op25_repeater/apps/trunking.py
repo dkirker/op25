@@ -1351,6 +1351,9 @@ class rx_ctl (object):
             'wacn':   None, 
             'sysid':  None})
 
+    def reload_tg_config(self):
+        sys.stderr.write("reload_tg_config not implemented for trunking")
+
     def set_frequency(self, params):
         frequency = params['freq']
         params['tuner'] = 0
